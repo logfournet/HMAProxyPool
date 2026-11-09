@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en" data-radius="sharp">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HMAProxyPool</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Crect x='0.5' y='0.5' width='31' height='31' fill='%23222427' stroke='%233a3c40'/%3E%3Cpath d='M16 8.5v15M8.5 16h15M11.4 11.4l9.2 9.2M20.6 11.4l-9.2 9.2' stroke='%234a4c50' stroke-width='1.1'/%3E%3Ccircle cx='16' cy='16' r='4.6' fill='%23ff4a1f'/%3E%3Ccircle cx='16' cy='16' r='1.9' fill='%2318191b'/%3E%3Ccircle cx='16' cy='8.5' r='1.9' fill='%239c9ea3'/%3E%3Ccircle cx='16' cy='23.5' r='1.9' fill='%239c9ea3'/%3E%3Ccircle cx='8.5' cy='16' r='1.9' fill='%239c9ea3'/%3E%3Ccircle cx='23.5' cy='16' r='1.9' fill='%239c9ea3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --p-bg:#18191b; --p-surface:#222427; --p-panel:#1d1f22; --p-panel2:#24262a;
+    --p-ink:#eff0f1; --p-muted:#9c9ea3;
+    --p-accent:#ff4a1f; --p-accent-ink:#18191b;
+    --line:rgba(239,240,241,.09); --line2:rgba(239,240,241,.16);
+    --ok:#57d28b; --warn:#f2c14e; --err:#ff6b5e; --blue:#4da3ff;
+    --font:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"Geist Mono",ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -200px, rgba(255,74,31,.06), transparent 60%),
+      radial-gradient(rgba(239,240,241,.045) 1px, transparent 1px) 0 0/22px 22px,
+      var(--p-bg);
+    color:var(--p-ink);
+    font:14px/1.55 var(--font);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    letter-spacing:-.003em;
+  }
+  .hidden{display:none!important}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .muted{color:var(--p-muted)}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)} .blue{color:var(--blue)}
+
+  /* ------------------------------------------------ logo */
+  .logo-mark{display:grid;place-items:center;flex:none}
+  .logo-mark svg{display:block;width:34px;height:34px}
+  .wordmark{font-weight:600;font-size:15px;letter-spacing:-.01em;line-height:1}
+  .wordmark b{font-weight:700}
+  .wordmark .tag{display:block;font:500 9.5px/1 var(--mono);color:var(--p-muted);margin-top:4px;letter-spacing:.12em;text-transform:uppercase}
+  .brand{display:flex;align-items:center;gap:12px;user-select:none}
+
+  /* ------------------------------------------------ login */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .login-box{width:360px;max-width:100%}
+  .login-box .brand{margin-bottom:26px}
+  .login-panel{background:var(--p-panel);border:1px solid var(--line);padding:28px}
+  .login-panel h1{margin:0 0 4px;font-size:19px;font-weight:650;letter-spacing:-.01em}
+  .login-panel p{margin:0 0 22px;color:var(--p-muted);font-size:13px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;font-weight:500;color:var(--p-muted);margin-bottom:6px}
+
+  /* ------------------------------------------------ layout */
+  header{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:16px;
+    padding:12px 24px;
+    background:color-mix(in srgb, var(--p-bg) 82%, transparent);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .head-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--p-muted);font-variant-numeric:tabular-nums;margin-right:4px}
+  main{max-width:1240px;margin:26px auto 80px;padding:0 24px;display:grid;gap:22px}
+
+  .card{background:var(--p-panel);border:1px solid var(--line);padding:20px}
+  .card + .card{margin-top:22px}
+  .card-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .card-head h2{margin:0;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--p-muted)}
+  .card-head .spacer{flex:1}
+
+  /* ------------------------------------------------ stats */
+  .stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .stat{background:var(--p-panel);border:1px solid var(--line);padding:14px 16px}
+  .stat .v{font:600 24px/1 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .stat .l{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--p-muted);margin-top:6px;font-weight:500}
+
+  /* ------------------------------------------------ controls */
+  input,select,textarea{
+    width:100%;
+    background:var(--p-bg);
+    border:1px solid var(--line2);
+    color:var(--p-ink);
+    font:400 13px/1.4 var(--font);
+    padding:9px 11px;
+    border-radius:0;
+    outline:none;
+    transition:border-color .16s ease;
+  }
+  select{
+    appearance:none;-webkit-appearance:none;
+    padding-right:32px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239c9ea3' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 11px center;
+    background-size:12px;
+    cursor:pointer;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--p-accent)}
+  input::placeholder,textarea::placeholder{color:color-mix(in srgb, var(--p-muted) 60%, transparent)}
+  textarea{resize:vertical;font-family:var(--mono);font-size:12px;line-height:1.5}
+  label.fld{display:block;font-size:12px;font-weight:500;color:var(--p-muted);margin-bottom:6px}
+  .form-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+  .form-row .cell{min-width:0}
+  .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .hint{font-size:12px;color:var(--p-muted);margin-top:14px;line-height:1.6}
+
+  button{
+    font:500 13px/1 var(--font);
+    cursor:pointer;
+    background:transparent;
+    color:var(--p-ink);
+    border:1px solid var(--line2);
+    border-radius:0;
+    padding:9px 14px;
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    white-space:nowrap;
+    transition:background-color .16s ease,border-color .16s ease,transform .12s ease;
+  }
+  button:hover{background:rgba(239,240,241,.05)}
+  button:active{transform:translateY(1px) scale(.99)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--p-accent);border-color:var(--p-accent);color:var(--p-accent-ink);font-weight:600}
+  button.primary:hover{background:#ff5b33;border-color:#ff5b33}
+  button.ghost{background:var(--p-ink);border-color:var(--p-ink);color:var(--p-bg);font-weight:600}
+  button.danger{color:var(--err);border-color:color-mix(in srgb, var(--err) 45%, transparent)}
+  button.danger:hover{background:color-mix(in srgb, var(--err) 10%, transparent)}
+  button.sm{padding:5px 9px;font-size:12px;border-radius:0}
+
+  /* ------------------------------------------------ tabs */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:-1px}
+  .tab{padding:9px 16px;font-size:13px;font-weight:500;color:var(--p-muted);border:none;border-radius:0;position:relative;background:transparent}
+  .tab:hover{background:rgba(239,240,241,.04);color:var(--p-ink)}
+  .tab.on{color:var(--p-ink)}
+  .tab.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;background:var(--p-accent)}
+
+  /* ------------------------------------------------ tables */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  thead th{
+    font:500 11px/1.2 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--p-muted);
+    background:color-mix(in srgb, var(--p-bg) 55%, transparent);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:rgba(239,240,241,.028)}
+  td .mono{font-size:12px}
+  .sub{font-size:11.5px;color:var(--p-muted);margin-top:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .empty{padding:34px;text-align:center;color:var(--p-muted);font-size:13px}
+
+  /* state dot */
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--p-muted);margin-right:7px;vertical-align:1px}
+  .dot.up{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent)}
+  .dot.down{background:var(--err);box-shadow:0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent)}
+  .dot.starting{background:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 18%, transparent)}
+
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;font-size:12px;font-weight:500;border:1px solid var(--line2);border-radius:0;color:var(--p-muted);white-space:nowrap}
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.55}
+  .chip.ok{color:var(--ok);border-color:color-mix(in srgb, var(--ok) 35%, transparent)}
+  .chip.ok::before{background:var(--ok);opacity:1}
+  .chip.down{color:var(--err);border-color:color-mix(in srgb, var(--err) 35%, transparent)}
+  .chip.down::before{background:var(--err);opacity:1}
+  .chip.busy{color:var(--warn);border-color:color-mix(in srgb, var(--warn) 35%, transparent)}
+  .chip.busy::before{background:var(--warn);opacity:1}
+
+  /* checkbox */
+  .cb{appearance:none;-webkit-appearance:none;width:16px;height:16px;border:1px solid var(--line2);border-radius:0;background:transparent;cursor:pointer;display:inline-grid;place-items:center;vertical-align:middle;margin:0;flex:none}
+  .cb:checked{background:var(--p-accent);border-color:var(--p-accent)}
+  .cb:checked::after{content:"";width:7px;height:4px;border-left:1.6px solid var(--p-accent-ink);border-bottom:1.6px solid var(--p-accent-ink);transform:rotate(-45deg) translateY(-1px)}
+  .cb:disabled{opacity:.35;cursor:not-allowed}
+  th .cb{vertical-align:middle}
+
+  /* location: flag + country name */
+  .loc{display:flex;align-items:center;gap:9px;white-space:nowrap}
+  .flag-img{width:21px;height:14px;object-fit:cover;border:1px solid var(--line2);display:inline-block;background:var(--p-bg);flex:none}
+  .flag-name{font-size:13px;font-weight:500}
+
+  /* searchable select (country picker) */
+  .combo{position:relative}
+  .combo input{padding-left:40px;padding-right:30px;cursor:text}
+  .combo .combo-flag{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:21px;height:14px;object-fit:cover;border:1px solid var(--line2);display:none;pointer-events:none;background:var(--p-bg)}
+  .combo.has .combo-flag{display:block}
+  .combo .combo-glyph{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;display:none;pointer-events:none}
+  .combo:not(.has) .combo-glyph{display:block}
+  .combo .clear{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--p-muted);padding:5px 8px;font:500 12px/1 var(--font);display:none}
+  .combo.has .clear{display:inline-flex}
+  .combo .clear:hover{background:transparent;color:var(--p-accent)}
+  .combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;background:var(--p-panel);border:1px solid var(--line2);max-height:300px;overflow-y:auto;display:none;box-shadow:0 18px 44px rgba(0,0,0,.6)}
+  .combo-list.on{display:block}
+  .combo-item{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px;position:relative}
+  .combo-item:hover,.combo-item.active{background:rgba(239,240,241,.06)}
+  .combo-item.active{box-shadow:inset 2px 0 0 var(--p-accent)}
+  .combo-item.sel .ci-name{color:var(--p-accent)}
+  .combo-item .ci-flag{width:21px;height:14px;object-fit:cover;border:1px solid var(--line2);flex:none;background:var(--p-bg)}
+  .combo-item .ci-glyph{width:17px;height:17px;flex:none;color:var(--p-muted)}
+  .combo-item .ci-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .combo-item .ci-code{font:600 10.5px/1 var(--mono);color:var(--p-muted);letter-spacing:.06em;border:1px solid var(--line2);padding:3px 5px}
+  .combo-item .ci-meta{font:500 10.5px/1 var(--mono);color:var(--p-muted);letter-spacing:.04em;white-space:nowrap}
+  .combo-empty{padding:13px;color:var(--p-muted);font-size:12.5px}
+
+  /* bulk bar */
+  .bulk{display:none;align-items:center;gap:12px;margin:0 0 12px;padding:10px 14px;border:1px solid var(--line2);background:rgba(239,240,241,.03)}
+  .bulk.on{display:flex}
+  .bulk .count{font-size:12.5px;font-weight:500}
+  .bulk .spacer{flex:1}
+
+  /* toast */
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    background:var(--p-ink);color:var(--p-bg);
+    font:500 13px/1 var(--font);
+    padding:11px 18px;border-radius:0;
+    box-shadow:0 12px 32px rgba(0,0,0,.5);
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+    max-width:min(560px,90vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    z-index:50;
+  }
+  #toast.show{opacity:1}
+
+  .err-msg{color:var(--err);font-size:12px;margin-top:10px;min-height:0}
+
+  /* ------------------------------------------------ api keys */
+  .newkey{border:1px solid color-mix(in srgb, var(--p-accent) 42%, transparent);background:color-mix(in srgb, var(--p-accent) 7%, transparent);padding:14px 16px;margin-top:16px}
+  .newkey-head{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--p-accent);font-weight:600;margin-bottom:10px}
+  .newkey-row{display:flex;gap:10px;align-items:center}
+  .newkey-row code{flex:1;min-width:0;font:400 12px/1.5 var(--mono);background:var(--p-bg);border:1px solid var(--line2);padding:9px 11px;overflow-x:auto;white-space:nowrap}
+  .tok{font:400 12px/1.5 var(--mono);letter-spacing:.01em;word-break:break-all}
+  .tok.masked{color:var(--p-muted)}
+  code.inline{font:400 12px/1 var(--mono);background:var(--p-bg);border:1px solid var(--line2);padding:3px 6px}
+  pre.cmd{background:var(--p-bg);border:1px solid var(--line);padding:13px 15px;overflow-x:auto;font:400 12px/1.75 var(--mono);color:var(--p-muted);margin:0;white-space:pre}
+  pre.cmd b{color:var(--p-ink);font-weight:500}
+  pre.cmd .cmt{color:color-mix(in srgb, var(--p-muted) 70%, transparent)}
+  .method{font:600 10.5px/1 var(--mono);letter-spacing:.06em;padding:4px 6px;border:1px solid var(--line2);display:inline-block;min-width:46px;text-align:center}
+  .method.get{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 40%, transparent)}
+  .method.post{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%, transparent)}
+  .method.del{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%, transparent)}
+  .endpoint{font:400 12px/1.5 var(--mono);color:var(--p-ink)}
+  .endpoint .arg{color:var(--p-muted)}
+
+  @media(max-width:1080px){.stat-grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:760px){.stat-grid{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr 1fr}main{padding:0 14px}header{padding:12px 14px}}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="login" class="hidden">
+  <div class="login-box">
+    <div class="brand"><span class="logo-mark"></span><span class="wordmark"><b>HMA</b>ProxyPool<span class="tag">WireGuard · Proxy Pool</span></span></div>
+    <div class="login-panel">
+      <h1>Sign In</h1>
+      <p>Control panel for the HMA WireGuard proxy pool.</p>
+      <div class="field"><label for="pw">Dashboard Password</label>
+        <input id="pw" type="password" placeholder="Enter Password" autocomplete="current-password" autofocus></div>
+      <button class="primary" id="btn-login" style="width:100%">Login</button>
+      <div id="login-err" class="err-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="hidden">
+  <header>
+    <div class="brand"><span class="logo-mark"></span><span class="wordmark"><b>HMA</b>ProxyPool<span class="tag">WireGuard · Proxy Pool</span></span></div>
+    <div class="head-right">
+      <span class="clock" id="clock"></span>
+      <span id="feed" class="chip down">No Token Feed</span>
+      <button class="sm" id="btn-refresh">Refresh</button>
+      <button class="sm" id="btn-logout">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- totals -->
+    <div class="stat-grid">
+      <div class="stat"><div class="v" id="st-proxies">0</div><div class="l">Proxies</div></div>
+      <div class="stat"><div class="v ok" id="st-up">0</div><div class="l">Up</div></div>
+      <div class="stat"><div class="v err" id="st-down">0</div><div class="l">Down</div></div>
+      <div class="stat"><div class="v" id="st-countries" style="color:var(--blue)">0</div><div class="l">Countries</div></div>
+      <div class="stat"><div class="v" id="st-ping">—</div><div class="l">Avg Ping</div></div>
+      <div class="stat"><div class="v" id="st-keys" style="color:var(--warn)">0</div><div class="l">Keys</div></div>
+    </div>
+
+    <!-- tabs -->
+    <div class="tabs">
+      <button class="tab on" data-tab="proxies">Proxies</button>
+      <button class="tab" data-tab="keys">Keys</button>
+      <button class="tab" data-tab="apis">APIs</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </div>
+
+    <!-- ============ PROXIES TAB ============ -->
+    <div id="tab-proxies">
+      <div class="card">
+        <div class="card-head"><h2>Create Proxies</h2></div>
+        <div class="form-row">
+          <div class="cell" style="flex:1;min-width:200px"><label class="fld" for="px-key">Key</label><select id="px-key"></select></div>
+          <div class="cell" style="flex:1;min-width:250px">
+            <label class="fld" for="px-country">Country</label>
+            <div class="combo" id="px-country-combo">
+              <svg class="combo-glyph" viewBox="0 0 24 24" fill="none" stroke="#9c9ea3" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.8 2.5 15.2 0 18-2.5-2.8-2.5-15.2 0-18Z"/></svg>
+              <img class="combo-flag" id="px-country-flag" alt="" aria-hidden="true">
+              <input id="px-country" type="text" autocomplete="off" spellcheck="false" placeholder="Search Country, City Or Code…" role="combobox" aria-expanded="false" aria-controls="px-country-list">
+              <button class="clear" id="px-country-clear" type="button" title="Clear Country" aria-label="Clear Country">Clear</button>
+              <div class="combo-list" id="px-country-list" role="listbox"></div>
+            </div>
+          </div>
+          <button class="sm" id="btn-load-countries" style="margin-bottom:1px" title="Re-read the country list from HMA">Reload</button>
+          <div class="cell" style="width:100px"><label class="fld" for="px-count">Count</label><input id="px-count" type="number" value="1" min="1" max="64"></div>
+          <div class="cell" style="width:110px"><label class="fld" for="px-sessions">Sessions</label><input id="px-sessions" type="number" value="1" min="1" max="4"></div>
+          <button class="primary" id="btn-create">Create Proxies</button>
+        </div>
+        <div id="px-err" class="err-msg"></div>
+        <p class="hint" id="px-country-hint">Country List Loads From HMA Discovery. Pick One To Pin Every Proxy To That Country.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Proxy List</h2>
+          <span class="spacer"></span>
+          <button class="sm" id="btn-geo" title="Re-look-up country and re-measure ping for every proxy">Refresh Geo &amp; Ping</button>
+        </div>
+        <div class="bulk" id="bulk">
+          <span class="count" id="bulk-count">0 Selected</span>
+          <span class="spacer"></span>
+          <button class="sm danger" id="btn-delsel">Delete Selected</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:32px"><input type="checkbox" class="cb" id="sel-all" title="Select All"></th>
+              <th>State</th>
+              <th>Location</th>
+              <th>Ping</th>
+              <th>Exit IP</th>
+              <th>Id / Name</th>
+              <th>Local Proxy</th>
+              <th>Traffic</th>
+              <th>Age</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody id="px-body"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ KEYS TAB ============ -->
+    <div class="card hidden" id="tab-keys">
+      <div class="card-head"><h2>Add Key</h2></div>
+      <div class="form-row">
+        <div class="cell" style="width:220px"><label class="fld" for="k-name">Name</label><input id="k-name" placeholder="My Key"></div>
+        <button id="btn-import" title="Windows: pull the live token from the running HMA service">Import From HMA Service</button>
+      </div>
+      <div style="margin-top:16px"><label class="fld" for="k-token">Token (JWT) — Paste Or Use A Token File In Settings</label>
+        <textarea id="k-token" rows="3" placeholder="eyJhbGciOiJSUzI1NiIsImtpZCI6…"></textarea></div>
+      <button class="primary" id="btn-addkey" style="margin-top:14px">Add Key</button>
+      <div id="k-err" class="err-msg"></div>
+
+      <div class="card-head" style="margin-top:28px"><h2>Keys</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Status</th><th>Note / Expiry</th><th>Pool (Running / Plan)</th><th>Actions</th></tr></thead>
+          <tbody id="k-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ APIS TAB ============ -->
+    <div class="hidden" id="tab-apis">
+      <div class="card">
+        <div class="card-head"><h2>Create API Key</h2></div>
+        <div class="form-row">
+          <div class="cell" style="flex:1;min-width:220px"><label class="fld" for="ak-name">Name</label><input id="ak-name" placeholder="Client Name"></div>
+          <div class="cell" style="width:200px"><label class="fld" for="ak-scope">Access</label>
+            <select id="ak-scope">
+              <option value="full">Full Control</option>
+              <option value="read">Read Only</option>
+            </select></div>
+          <button class="primary" id="btn-addapikey">Create API Key</button>
+        </div>
+        <div id="ak-err" class="err-msg"></div>
+        <div id="ak-new" class="newkey hidden">
+          <div class="newkey-head">New Key Created — Copy It Now</div>
+          <div class="newkey-row">
+            <code id="ak-newtoken"></code>
+            <button class="sm" id="btn-copynew">Copy</button>
+          </div>
+        </div>
+        <p class="hint">Send The Key As <code class="inline">Authorization: Bearer &lt;key&gt;</code> Or <code class="inline">X-API-Key: &lt;key&gt;</code>. <b>Full Control</b> Can Create, Rotate And Delete Proxies; <b>Read Only</b> Can Just List Them.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>API Keys</h2>
+          <span class="spacer"></span>
+          <button class="sm" id="btn-apikeys-refresh">Reload</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Name</th>
+              <th style="min-width:260px">Key</th>
+              <th>Access</th>
+              <th>Created</th>
+              <th>Last Used</th>
+              <th>Requests</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody id="ak-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Endpoints</h2>
+          <span class="spacer"></span>
+          <button class="sm" id="btn-copybase">Copy Base URL</button>
+        </div>
+        <div class="table-wrap" style="margin-bottom:18px">
+          <table>
+            <thead><tr><th style="width:78px">Method</th><th style="width:300px">Path</th><th>Description</th></tr></thead>
+            <tbody id="ep-body"></tbody>
+          </table>
+        </div>
+        <div class="card-head"><h2>Quick Start</h2></div>
+        <pre class="cmd" id="api-example"></pre>
+      </div>
+    </div>
+
+    <!-- ============ SETTINGS TAB ============ -->
+    <div class="card hidden" id="tab-settings">
+      <div class="card-head"><h2>Settings</h2></div>
+      <div class="form-grid">
+        <div><label class="fld" for="s-listen">Bind Address</label>
+          <select id="s-listen">
+            <option value="127.0.0.1">127.0.0.1 — Local Only</option>
+            <option value="0.0.0.0">0.0.0.0 — All Interfaces</option>
+          </select></div>
+        <div><label class="fld" for="s-user">Proxy Username</label><input id="s-user" placeholder="Empty = No Auth" autocomplete="off"></div>
+        <div><label class="fld" for="s-pass">Proxy Password</label><input id="s-pass" type="password" placeholder="Empty = No Auth" autocomplete="new-password"></div>
+        <div><label class="fld" for="s-port">Port Base (SOCKS5)</label><input id="s-port" type="number"></div>
+        <div><label class="fld" for="s-http">HTTP Offset</label><input id="s-http" type="number"></div>
+        <div><label class="fld" for="s-sessions">Default Sessions / Proxy</label><input id="s-sessions" type="number"></div>
+        <div><label class="fld" for="s-probe">Probe / Verify URL</label><input id="s-probe"></div>
+        <div><label class="fld" for="s-tokenfile">Token File (Watched)</label><input id="s-tokenfile" placeholder="jwt.txt"></div>
+      </div>
+      <div class="form-row" style="margin-top:16px">
+        <button class="primary" id="btn-save">Save Settings</button>
+        <button id="btn-rebuild" title="Recreate every proxy so Bind Address and Credentials apply">Rebuild Proxies</button>
+      </div>
+      <div id="s-err" class="err-msg"></div>
+      <p class="hint">Bind Address And Proxy Credentials Apply To <b>New</b> Proxies — Press <b>Rebuild Proxies</b> To Apply Them To The Running Pool. Every Proxy In The Pool Shares One Username / Password. Leave Both Empty For An Open Proxy. Port Base / HTTP Offset Apply To New Proxies Only.</p>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const state={overview:null,tab:'proxies',sel:new Set(),timer:null,apikeys:[],reveal:new Set()};
+
+const LOGO=`<svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+  <rect x="0.5" y="0.5" width="31" height="31" fill="#222427" stroke="#3a3c40"/>
+  <path d="M16 8.5v15M8.5 16h15M11.4 11.4l9.2 9.2M20.6 11.4l-9.2 9.2" stroke="#4a4c50" stroke-width="1.1"/>
+  <circle cx="16" cy="16" r="4.6" fill="#ff4a1f"/>
+  <circle cx="16" cy="16" r="1.9" fill="#18191b"/>
+  <circle cx="16" cy="8.5" r="1.9" fill="#9c9ea3"/>
+  <circle cx="16" cy="23.5" r="1.9" fill="#9c9ea3"/>
+  <circle cx="8.5" cy="16" r="1.9" fill="#9c9ea3"/>
+  <circle cx="23.5" cy="16" r="1.9" fill="#9c9ea3"/>
+</svg>`;
+document.querySelectorAll('.logo-mark').forEach(el=>el.innerHTML=LOGO);
+
+function esc(s){return (s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function fmtAge(sec){
+  if(!sec) return '—';
+  if(sec<60) return sec+'s';
+  if(sec<3600) return Math.floor(sec/60)+'m';
+  return Math.floor(sec/3600)+'h'+Math.floor((sec%3600)/60)+'m';
+}
+function fmtBytes(n){
+  if(n==null) return '0B';
+  const u=['B','KB','MB','GB']; let i=0;
+  while(n>=1024&&i<u.length-1){n/=1024;i++}
+  return n.toFixed(i?1:0)+u[i];
+}
+function pingCls(ms){if(!ms)return '';if(ms<100)return 'ok';if(ms<250)return 'warn';return 'err'}
+
+async function api(path,opts){
+  const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));
+  let j=null; try{j=await r.json()}catch(e){}
+  if(r.status===401){showLogin();throw new Error('unauthorized')}
+  if(!r.ok){const m=(j&&j.error)||('HTTP '+r.status);throw new Error(m)}
+  return j;
+}
+
+function showLogin(){login.classList.remove('hidden');app.classList.add('hidden')}
+function showApp(){login.classList.add('hidden');app.classList.remove('hidden');refresh()}
+
+/* ---------- login ---------- */
+$('#btn-login').onclick=async()=>{
+  try{await api('/api/login',{method:'POST',body:JSON.stringify({password:$('#pw').value})});$('#login-err').textContent='';showApp()}
+  catch(e){$('#login-err').textContent=e.message}
+};
+$('#btn-logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch(e){};showLogin()};
+
+/* ---------- overview + render ---------- */
+async function refresh(){
+  try{
+    const o=await api('/api/overview');
+    state.overview=o;
+    render();
+  }catch(e){/* unauthorized handled above */}
+}
+
+function render(){
+  const o=state.overview;
+  if(!o) return;
+  const t=o.totals||{};
+  $('#st-proxies').textContent=t.proxies||0;
+  $('#st-up').textContent=t.up||0;
+  $('#st-down').textContent=t.down||0;
+  $('#st-keys').textContent=t.keys||0;
+
+  // countries + avg ping
+  const countries=new Set(); let pings=[];
+  (o.proxies||[]).forEach(p=>{
+    if(p.country) countries.add(p.country);
+    if(p.ping_ms>0) pings.push(p.ping_ms);
+  });
+  $('#st-countries').textContent=countries.size||0;
+  const avgEl=$('#st-ping');
+  const avg=pings.length?Math.round(pings.reduce((a,b)=>a+b,0)/pings.length):0;
+  avgEl.textContent=avg?avg+' ms':'—';
+  avgEl.className='v'+(avg?(' '+pingCls(avg)):'');
+
+  $('#clock').textContent=new Date(o.now).toLocaleTimeString();
+
+  // token feed chip
+  const tf=o.settings&&o.settings.token_file;
+  const feed=$('#feed');
+  if(tf){feed.textContent='Token File: '+tf;feed.className='chip ok'}else{feed.textContent='No Token Feed';feed.className='chip down'}
+
+  renderProxies(o);
+  renderKeys(o);
+  renderSettings(o);
+}
+
+function renderProxies(o){
+  const sel=$('#px-key');
+  const cur=sel.value;
+  sel.innerHTML='';
+  (o.keys||[]).forEach(k=>{const op=document.createElement('option');op.value=k.id;op.textContent=k.name+' ('+k.proxies+')';sel.appendChild(op)});
+  if(cur) sel.value=cur;
+  if((o.keys||[]).length) loadCountries(false);
+
+  const body=$('#px-body');
+  // sort by ping ascending (low → high); proxies without a ping go last
+  const ps=(o.proxies||[]).slice().sort((a,b)=>{
+    const pa=a.ping_ms>0?a.ping_ms:Infinity;
+    const pb=b.ping_ms>0?b.ping_ms:Infinity;
+    if(pa!==pb) return pa-pb;
+    return (a.port||0)-(b.port||0);
+  });
+  if(!ps.length){
+    body.innerHTML='<tr><td colspan="10" class="empty">No Proxies Yet. Create Some Above.</td></tr>';
+    updateBulk(); return;
+  }
+  body.innerHTML=ps.map(p=>{
+    const stDot=p.up?'up':(p.state&&p.state!=='down'?'starting':'down');
+    const ck=state.sel.has(p.id)?'checked':'';
+    const cc=String(p.country_code||p.country_requested||'').trim().toUpperCase();
+    const flagArt=cc?`<img class="flag-img" src="${flagURL(cc,24)}" alt="${esc(cc)}" loading="lazy" onerror="this.style.visibility='hidden'">`:'';
+    const loc=p.country
+      ? `<span class="loc">${flagArt}<span class="flag-name">${esc(p.country)}</span></span>`
+      : (cc?`<span class="loc">${flagArt}<span class="flag-name">${esc(cc)}</span></span>`:'<span class="muted">—</span>');
+    const ping=p.ping_ms>0?`<span class="num ${pingCls(p.ping_ms)}">${p.ping_ms} ms</span>`:'<span class="muted">—</span>';
+    return `<tr>
+      <td><input type="checkbox" class="cb" ${ck} onclick="toggleSel('${esc(p.id)}')" title="Select"></td>
+      <td><span class="dot ${stDot}"></span></td>
+      <td>${loc}</td>
+      <td>${ping}</td>
+      <td><span class="mono">${esc(p.exit_ip||'—')}</span>${p.session_ctip?'<div class="sub">'+esc(p.session_ctip)+'</div>':''}</td>
+      <td><span class="mono">${esc(p.id)}</span><div class="sub">${esc(p.name||'')} · ${p.sessions} sess${p.country_requested?' · '+esc(p.country_requested):''}</div></td>
+      <td><span class="mono">${esc(p.socks5||'—')}</span>${p.http?'<div class="sub">'+esc(p.http)+'</div>':''}</td>
+      <td class="num">${fmtBytes(p.rx_bytes)} / ${fmtBytes(p.tx_bytes)}</td>
+      <td class="num">${fmtAge(p.session_age_sec)}</td>
+      <td style="white-space:nowrap">
+        <button class="sm" onclick="doRotate('${esc(p.id)}')">Rotate</button>
+        <button class="sm" onclick="doVerify('${esc(p.id)}')">Verify</button>
+        <button class="sm danger" onclick="doDelete('${esc(p.id)}')">Delete</button>
+      </td></tr>`;
+  }).join('');
+  updateBulk();
+}
+
+function renderKeys(o){
+  const body=$('#k-body');
+  const ks=o.keys||[];
+  if(!ks.length){body.innerHTML='<tr><td colspan="5" class="empty">No Keys. Add One Below (Or Import).</td></tr>';return}
+  body.innerHTML=ks.map(k=>{
+    const st=k.status==='ok'?'ok':(k.status==='invalid'?'down':'busy');
+    return `<tr>
+      <td><b>${esc(k.name)}</b><div class="sub">${esc(k.id)}</div></td>
+      <td><span class="chip ${st}">${esc(k.status)}</span></td>
+      <td><span class="muted">${esc(k.note||'')}</span>${k.expires_at?'<div class="sub">Exp '+esc(k.expires_at.replace('T',' ').slice(0,19))+'</div>':''}</td>
+      <td class="num"><b>${k.proxies}</b> / ${k.plan_count||0}</td>
+      <td style="white-space:nowrap">
+        <button class="sm" onclick="promptToken('${esc(k.id)}','${esc(k.name)}')">Token</button>
+        <button class="sm danger" onclick="delKey('${esc(k.id)}')">Delete</button>
+      </td></tr>`;
+  }).join('');
+}
+
+function renderSettings(o){
+  const s=o.settings||{};
+  const set=(id,v)=>{$('#'+id).value=(v==null?'':v)};
+  set('s-port',s.port_base); set('s-http',s.http_offset);
+  set('s-sessions',s.sessions); set('s-probe',s.probe_url); set('s-tokenfile',s.token_file||'');
+  set('s-user',s.proxy_user||''); set('s-pass',s.proxy_pass||'');
+  const lh=$('#s-listen');
+  if(lh && !lh.dataset.touched) lh.value=s.listen_host||'127.0.0.1';
+}
+
+/* ---------- selection + bulk delete ---------- */
+function toggleSel(id){
+  if(state.sel.has(id)) state.sel.delete(id); else state.sel.add(id);
+  renderProxies(state.overview);
+}
+$('#sel-all').onchange=function(){
+  const ps=(state.overview&&state.overview.proxies)||[];
+  if(this.checked){ps.forEach(p=>state.sel.add(p.id))}else{state.sel.clear()}
+  renderProxies(state.overview);
+};
+function updateBulk(){
+  const n=state.sel.size;
+  const bulk=$('#bulk');
+  const all=$('#sel-all');
+  const ps=(state.overview&&state.overview.proxies)||[];
+  if(ps.length){
+    all.disabled=false;
+    all.checked=ps.length>0&&state.sel.size===ps.length;
+  }else{all.checked=false;all.disabled=true}
+  $('#bulk-count').textContent=n+' Selected';
+  bulk.classList.toggle('on',n>0);
+  $('#btn-delsel').disabled=n===0;
+}
+$('#btn-delsel').onclick=async()=>{
+  const ids=[...state.sel];
+  if(!ids.length) return;
+  if(!confirm('Delete '+ids.length+' Selected Prox'+(ids.length>1?'ies':'y')+'?')) return;
+  try{
+    const j=await api('/api/proxies/bulk-delete',{method:'POST',body:JSON.stringify({ids})});
+    state.sel.clear();
+    toast('Deleted '+j.deleted+' Proxy'+(j.deleted!==1?'ies':'y'));
+    refresh();
+  }catch(e){toast(e.message)}
+};
+
+/* ---------- actions ---------- */
+$('#btn-create').onclick=async()=>{
+  const key_id=$('#px-key').value;
+  if(!key_id){toast('Add A Key First');return}
+  $('#px-err').textContent='';
+  const country=countrySel.code;
+  const where=country?' In '+countrySel.name:' In The Nearest Location';
+  try{
+    await api('/api/proxies',{method:'POST',body:JSON.stringify({
+      key_id, count:+$('#px-count').value, sessions:+$('#px-sessions').value, country})});
+    toast('Creating '+$('#px-count').value+' Proxies'+where+'… Tunnels Come Up Over A Few Seconds');
+    setTimeout(refresh,2500);
+  }catch(e){$('#px-err').textContent=e.message}
+};
+
+$('#btn-addkey').onclick=async()=>{
+  $('#k-err').textContent='';
+  try{
+    const j=await api('/api/keys',{method:'POST',body:JSON.stringify({
+      name:$('#k-name').value, token:$('#k-token').value.trim()})});
+    $('#k-token').value=''; toast('Key Added: '+j.note);
+    refresh();
+  }catch(e){$('#k-err').textContent=e.message}
+};
+
+$('#btn-import').onclick=async()=>{
+  $('#k-err').textContent='';
+  try{const j=await api('/api/keys/import',{method:'POST',body:'{}'});toast('Imported: '+j.note);refresh()}
+  catch(e){$('#k-err').textContent=e.message}
+};
+
+$('#btn-save').onclick=async()=>{
+  $('#s-err').textContent='';
+  try{
+    const j=await api('/api/settings',{method:'POST',body:JSON.stringify({
+      port_base:+$('#s-port').value, http_offset:+$('#s-http').value,
+      sessions:+$('#s-sessions').value, probe_url:$('#s-probe').value,
+      token_file:$('#s-tokenfile').value.trim(),
+      listen_host:$('#s-listen').value,
+      proxy_user:$('#s-user').value.trim(),
+      proxy_pass:$('#s-pass').value})});
+    toast(j.rebuild_required?'Settings Saved — Press Rebuild Proxies To Apply':'Settings Saved');
+    refresh();
+  }catch(e){$('#s-err').textContent=e.message}
+};
+
+$('#btn-rebuild').onclick=async()=>{
+  const n=(state.overview&&state.overview.proxies||[]).length;
+  if(!confirm('Recreate all '+n+' proxies with the current Bind Address and Credentials?')) return;
+  try{
+    await api('/api/proxies/rebuild',{method:'POST'});
+    toast('Rebuilding '+n+' Proxies…');
+    setTimeout(refresh,4000);
+  }catch(e){toast(e.message)}
+};
+
+/* ---------- countries: searchable picker ---------- */
+let countryList=[];                 // [{code,name,cities,servers}]
+let countrySel={code:'',name:''};   // empty code = Any / nearest
+let countryActive=-1;
+let countriesLoaded=false;
+
+// Flag artwork comes from flagsapi.com (Windows has no flag emoji glyphs).
+const flagURL=(code,size)=>'https://flagsapi.com/'+String(code||'').toUpperCase()+'/flat/'+size+'.png';
+const GLOBE='<svg class="ci-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.8 2.5 15.2 0 18-2.5-2.8-2.5-15.2 0-18Z"/></svg>';
+
+function countryRows(){
+  const q=$('#px-country').value.trim().toLowerCase();
+  const any={code:'',name:'Any (Nearest)',cities:[],servers:null};
+  const terms=q?q.split(/\s+/).filter(Boolean):[];
+  const score=c=>{
+    if(!terms.length) return 0;
+    const name=c.name.toLowerCase(), code=c.code.toLowerCase(), cities=(c.cities||[]).join(' ').toLowerCase();
+    if(code===q||name===q) return 0;
+    if(code.startsWith(q)||name.startsWith(q)) return 1;
+    if(cities.startsWith(q)) return 2;
+    return 3;
+  };
+  const hit=c=>{
+    if(!terms.length) return true;
+    const hay=(c.name+' '+c.code+' '+(c.cities||[]).join(' ')).toLowerCase();
+    return terms.every(t=>hay.includes(t));
+  };
+  const rows=[any,...countryList.filter(hit)];
+  rows.sort((a,b)=>a.code===''?-1:(b.code===''?1:(score(a)-score(b))||a.name.localeCompare(b.name)));
+  return rows;
+}
+
+function renderCountryList(){
+  const box=$('#px-country-list');
+  const rows=countryRows();
+  if(countryActive>=rows.length) countryActive=rows.length-1;
+  if(!rows.length){box.innerHTML='<div class="combo-empty">No Country Matches That Search.</div>';return}
+  box.innerHTML=rows.map((c,i)=>{
+    const cls='combo-item'+(c.code===countrySel.code?' sel':'')+(i===countryActive?' active':'');
+    const art=c.code
+      ? `<img class="ci-flag" src="${flagURL(c.code,24)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ci-glyph',textContent:'⚑'}))">`
+      : GLOBE;
+    const meta=c.code?`<span class="ci-meta">${c.servers} SRV${c.cities&&c.cities.length?' · '+esc(c.cities.slice(0,2).join(', ')):''}</span>`:'';
+    const codeTag=c.code?`<span class="ci-code">${esc(c.code)}</span>`:'';
+    return `<div class="${cls}" role="option" data-code="${esc(c.code)}" title="${esc((c.cities||[]).join(', '))}">${art}<span class="ci-name">${esc(c.name)}</span>${codeTag}${meta}</div>`;
+  }).join('');
+}
+
+function scrollActive(){const el=$('#px-country-list .combo-item.active');if(el)el.scrollIntoView({block:'nearest'})}
+
+function openCountry(){
+  renderCountryList();
+  $('#px-country-list').classList.add('on');
+  $('#px-country').setAttribute('aria-expanded','true');
+}
+
+function parkCountry(){
+  $('#px-country-list').classList.remove('on');
+  $('#px-country').setAttribute('aria-expanded','false');
+  countryActive=-1;
+}
+
+function selectCountry(code){
+  const c=countryList.find(x=>x.code===code)||null;
+  countrySel=c?{code:c.code,name:c.name}:{code:'',name:''};
+  const combo=$('#px-country-combo');
+  const flag=$('#px-country-flag');
+  combo.classList.toggle('has',!!c);
+  if(c){flag.src=flagURL(c.code,32)}else{flag.removeAttribute('src')}
+  $('#px-country').value=c?c.name:'';
+  parkCountry();
+  $('#px-country').blur();
+}
+
+function resetCountryPicker(){
+  countrySel={code:'',name:''};
+  $('#px-country').value='';
+  $('#px-country-combo').classList.remove('has');
+  $('#px-country-flag').removeAttribute('src');
+}
+
+$('#px-country').addEventListener('focus',function(){
+  this.value='';
+  countryActive=-1;
+  openCountry();
+});
+$('#px-country').addEventListener('input',function(){
+  countryActive=0;
+  if(!$('#px-country-list').classList.contains('on')) openCountry(); else renderCountryList();
+});
+$('#px-country').addEventListener('keydown',function(e){
+  const open=$('#px-country-list').classList.contains('on');
+  const rows=countryRows();
+  if(e.key==='ArrowDown'){e.preventDefault();if(!open)openCountry();countryActive=Math.min(countryActive+1,rows.length-1);renderCountryList();scrollActive()}
+  else if(e.key==='ArrowUp'){e.preventDefault();countryActive=Math.max(countryActive-1,0);renderCountryList();scrollActive()}
+  else if(e.key==='Enter'){e.preventDefault();const r=rows[countryActive];if(open&&r)selectCountry(r.code);else parkCountry()}
+  else if(e.key==='Escape'){e.preventDefault();$('#px-country').value=countrySel.name;parkCountry()}
+  else if(e.key==='Tab'){ $('#px-country').value=countrySel.name; parkCountry() }
+});
+$('#px-country').addEventListener('blur',()=>setTimeout(()=>{
+  if($('#px-country-list').classList.contains('on')){$('#px-country').value=countrySel.name;parkCountry()}
+},140));
+$('#px-country-list').addEventListener('mousedown',e=>{
+  const it=e.target.closest('.combo-item');
+  if(!it) return;
+  e.preventDefault();
+  selectCountry(it.dataset.code||'');
+});
+$('#px-country-clear').addEventListener('mousedown',e=>{
+  e.preventDefault();
+  resetCountryPicker();
+  $('#px-country-list').classList.contains('on')||openCountry();
+});
+
+async function loadCountries(force){
+  if(countriesLoaded&&!force) return;
+  const keyID=$('#px-key').value;
+  const hint=$('#px-country-hint');
+  hint.textContent='Loading Countries From HMA Discovery…';
+  try{
+    const j=await api('/api/countries'+(keyID?'?key_id='+encodeURIComponent(keyID):''));
+    countryList=(j.countries||[]).slice();
+    if(countrySel.code&&!countryList.some(c=>c.code===countrySel.code)) resetCountryPicker();
+    countriesLoaded=true;
+    hint.textContent=(j.count||0)+' Countries Available For This Token — Type To Search, Or Leave Empty For Nearest.';
+    if($('#px-country-list').classList.contains('on')) renderCountryList();
+  }catch(e){
+    hint.textContent='Country List Failed: '+e.message;
+  }
+}
+
+$('#btn-geo').onclick=async()=>{
+  toast('Refreshing Geo & Ping…');
+  try{await api('/api/geo/refresh',{method:'POST'});setTimeout(refresh,1600)}
+  catch(e){toast(e.message)}
+};
+
+async function doRotate(id){
+  try{const j=await api('/api/proxies/'+id+'/rotate',{method:'POST'});toast('Rotating '+id+' → New Exit IP');setTimeout(refresh,3000)}
+  catch(e){toast(e.message)}
+}
+async function doVerify(id){
+  toast('Verifying '+id+'…');
+  try{const j=await api('/api/proxies/'+id+'/verify');toast('Exit IP: '+j.exit_ip);refresh()}
+  catch(e){toast('Verify: '+e.message)}
+}
+async function doDelete(id){
+  if(!confirm('Delete Proxy '+id+'?')) return;
+  try{await api('/api/proxies/'+id,{method:'DELETE'});state.sel.delete(id);toast('Deleted '+id);refresh()}
+  catch(e){toast(e.message)}
+}
+async function delKey(id){
+  if(!confirm('Delete Key '+id+' And All Its Proxies?')) return;
+  try{await api('/api/keys/'+id,{method:'DELETE'});toast('Key Deleted');refresh()}
+  catch(e){toast(e.message)}
+}
+async function promptToken(id,name){
+  const tok=prompt('Paste A Fresh JWT For Key "'+name+'" (From Token File Or HMA Import)');
+  if(!tok||!tok.trim()) return;
+  try{const j=await api('/api/keys/'+id+'/token',{method:'POST',body:JSON.stringify({token:tok.trim()})});toast('Token Updated: '+j.updated);refresh()}
+  catch(e){toast(e.message)}
+}
+
+/* ---------- API keys ---------- */
+const API_BASE=location.origin+'/api/v1';
+const API_ENDPOINTS=[
+  ['GET','/me','Key Info And Pool Totals','get'],
+  ['GET','/proxies','List Proxies — ?format=socks5|http, ?state=up, ?country=US','get'],
+  ['POST','/proxies','Create Proxies — {key_id, count, sessions, country}','post'],
+  ['GET','/proxies/{id}','One Proxy — Country, Ping, Exit IP','get'],
+  ['POST','/proxies/{id}/rotate','Rotate To A New Exit IP','post'],
+  ['GET','/proxies/{id}/verify','Verify The Exit IP Through The Tunnel','get'],
+  ['DELETE','/proxies/{id}','Delete One Proxy','del'],
+  ['POST','/proxies/bulk-delete','Delete Many — {ids:[…]}','post'],
+  ['POST','/geo/refresh','Re-Measure Country And Ping','post'],
+  ['GET','/countries','Countries Available To The Token','get'],
+  ['GET','/keys','List HMA Keys','get'],
+  ['POST','/keys','Add HMA Key — {name, token}','post'],
+  ['DELETE','/keys/{id}','Delete An HMA Key','del'],
+  ['GET','/settings','Read Pool Settings','get'],
+  ['POST','/settings','Change Pool Settings','post'],
+];
+
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);toast('Copied')}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');toast('Copied')}catch(_){toast('Copy Failed')}
+    ta.remove();
+  }
+}
+
+function renderEndpoints(){
+  $('#ep-body').innerHTML=API_ENDPOINTS.map(([m,p,d,c])=>
+    `<tr><td><span class="method ${c}">${m}</span></td><td><span class="endpoint">${esc(p)}</span></td><td class="muted">${esc(d)}</td></tr>`).join('');
+}
+
+function renderExample(){
+  const k='YOUR_API_KEY';
+  const el=$('#api-example');
+  el.textContent=
+`# list every proxy as json
+curl -H "Authorization: Bearer ${k}" ${API_BASE}/proxies
+
+# plain socks5 list, one url per line
+curl -H "X-API-Key: ${k}" "${API_BASE}/proxies?format=socks5"
+
+# create 2 proxies in the united states
+curl -X POST -H "Authorization: Bearer ${k}" \\
+  -d '{"count":2,"country":"US","sessions":1}' ${API_BASE}/proxies
+
+# rotate one proxy, then verify its exit ip
+curl -X POST -H "Authorization: Bearer ${k}" ${API_BASE}/proxies/p3-ab12cd/rotate
+curl -H "Authorization: Bearer ${k}" ${API_BASE}/proxies/p3-ab12cd/verify
+
+# delete it
+curl -X DELETE -H "Authorization: Bearer ${k}" ${API_BASE}/proxies/p3-ab12cd`;
+}
+
+async function loadApiKeys(){
+  try{
+    const j=await api('/api/apikeys');
+    state.apikeys=j.keys||[];
+    renderApiKeys();
+    renderExample();
+  }catch(e){
+    $('#ak-body').innerHTML='<tr><td colspan="7" class="empty">'+esc(e.message)+'</td></tr>';
+  }
+}
+
+function renderApiKeys(){
+  const body=$('#ak-body');
+  const ks=state.apikeys||[];
+  if(!ks.length){body.innerHTML='<tr><td colspan="7" class="empty">No API Keys Yet. Create One Above.</td></tr>';return}
+  body.innerHTML=ks.map(k=>{
+    const shown=state.reveal.has(k.id);
+    const tok=shown?k.token:(k.prefix+'••••••••••••••••••••');
+    const scope=k.scopes==='Read + Write'
+      ? '<span class="chip ok">Read + Write</span>'
+      : '<span class="chip">Read Only</span>';
+    const created=k.created_at?esc(k.created_at.replace('T',' ').slice(0,16)):'—';
+    const used=k.last_used?esc(k.last_used.replace('T',' ').slice(0,16)):'<span class="muted">Never</span>';
+    return `<tr>
+      <td><b>${esc(k.name)}</b><div class="sub">${esc(k.id)}</div></td>
+      <td><span class="tok ${shown?'':'masked'}">${esc(tok)}</span></td>
+      <td>${scope}</td>
+      <td class="num">${created}</td>
+      <td class="num">${used}</td>
+      <td class="num">${k.requests||0}</td>
+      <td style="white-space:nowrap">
+        <button class="sm" data-act="show" data-id="${esc(k.id)}">${shown?'Hide':'Reveal'}</button>
+        <button class="sm" data-act="copy" data-id="${esc(k.id)}">Copy</button>
+        <button class="sm danger" data-act="del" data-id="${esc(k.id)}">Delete</button>
+      </td></tr>`;
+  }).join('');
+}
+
+$('#ak-body').onclick=async e=>{
+  const btn=e.target.closest('button[data-act]'); if(!btn) return;
+  const id=btn.dataset.id, act=btn.dataset.act;
+  const k=(state.apikeys||[]).find(x=>x.id===id); if(!k) return;
+  if(act==='show'){
+    state.reveal.has(id)?state.reveal.delete(id):state.reveal.add(id);
+    renderApiKeys();
+  }else if(act==='copy'){
+    copyText(k.token);
+  }else if(act==='del'){
+    if(!confirm('Delete API Key "'+k.name+'"? Clients Using It Stop Working Immediately.')) return;
+    try{
+      await api('/api/apikeys/'+encodeURIComponent(id),{method:'DELETE'});
+      state.reveal.delete(id);
+      toast('API Key Deleted');
+      loadApiKeys();
+    }catch(err){toast(err.message)}
+  }
+};
+
+$('#btn-addapikey').onclick=async()=>{
+  $('#ak-err').textContent='';
+  const name=$('#ak-name').value.trim();
+  const write=$('#ak-scope').value==='full';
+  const btn=$('#btn-addapikey');
+  btn.disabled=true;
+  try{
+    const j=await api('/api/apikeys',{method:'POST',body:JSON.stringify({name,write})});
+    $('#ak-name').value='';
+    $('#ak-newtoken').textContent=j.token;
+    $('#ak-new').classList.remove('hidden');
+    state.reveal.add(j.key.id);
+    toast('API Key Created');
+    await loadApiKeys();
+  }catch(e){$('#ak-err').textContent=e.message}
+  finally{btn.disabled=false}
+};
+
+$('#btn-copynew').onclick=()=>copyText($('#ak-newtoken').textContent);
+$('#btn-apikeys-refresh').onclick=()=>loadApiKeys();
+$('#btn-copybase').onclick=()=>copyText(API_BASE);
+
+/* ---------- tabs + timer ---------- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    state.tab=t.dataset.tab;
+    ['proxies','keys','apis','settings'].forEach(n=>$('#tab-'+n).classList.toggle('hidden',n!==state.tab));
+    if(state.tab==='apis') loadApiKeys();
+  };
+});
+$('#btn-refresh').onclick=refresh;
+$('#btn-load-countries').onclick=()=>loadCountries(true);
+$('#px-key').onchange=()=>loadCountries(true);
+$('#s-listen').onchange=function(){this.dataset.touched='1'};
+
+let toastT=null;
+function toast(m){const el=$('#toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3800)}
+
+/* ---------- boot ---------- */
+(async()=>{
+  $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btn-login').click()});
+  renderEndpoints();
+  renderExample();
+  try{const me=await api('/api/me');if(me.authed){showApp()}else{showLogin()}}catch(e){showLogin()}
+  setInterval(refresh,3000);
+})();
+</script>
+</body>
+</html>

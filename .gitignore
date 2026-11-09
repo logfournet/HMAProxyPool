@@ -1,0 +1,16 @@
+# tokens / secrets
+*.json
+!tunnels.example.json
+!go.mod
+jwt*.txt
+*.token
+
+# build output
+*.exe
+*~
+hmaproxypool
+hmaproxypool-linux
+
+# runtime
+pool.log
+pool.err
