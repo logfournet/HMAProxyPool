@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-const version = "1.0.0"
+// version is stamped at build time from the git tag:
+//
+//	go build -ldflags "-X main.version=v1.0.0"
+var version = "1.0.0"
 
 func main() {
 	var (

@@ -1,0 +1,136 @@
+# Release packaging. Run manually: Actions → release → Run workflow.
+#
+# The tag must exist first:
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# Default: source-only release (tag archive + checksums). No .exe is uploaded,
+# because GitHub scans uploaded binaries and a false positive costs the account.
+# Enable "attach_binaries" only when you actually want to distribute the exe —
+# it is compiled here from the public source, so it is reproducible from the tag.
+
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag, e.g. v1.0.0"
+        required: true
+        type: string
+      attach_binaries:
+        description: "Also build and attach hmaproxypool binaries (win amd64, linux amd64/arm64)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: validate tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: tag exists?
+        run: |
+          T="${{ inputs.tag }}"
+          if ! git tag -l "$T" | grep -qx "$T"; then
+            echo "::error::tag '$T' not found — push it first: git tag $T && git push origin $T"
+            exit 1
+          fi
+          echo "tag $T ok ($(git rev-list -n1 "$T"))"
+
+  bin:
+    name: build ${{ matrix.asset }}
+    if: inputs.attach_binaries
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-latest, goos: windows, goarch: amd64, asset: hmaproxypool.exe }
+          - { runner: ubuntu-latest,  goos: linux,   goarch: amd64, asset: hmaproxypool-linux-amd64 }
+          - { runner: ubuntu-latest,  goos: linux,   goarch: arm64, asset: hmaproxypool-linux-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: build
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+          VERSION: ${{ inputs.tag }}
+        run: |
+          # -trimpath strips local paths; -X stamps the version from the tag.
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION#v}" -o "${{ matrix.asset }}" .
+          ls -lh "${{ matrix.asset }}"
+      - name: verify no paths leaked into the binary
+        shell: bash
+        run: |
+          A="${{ matrix.asset }}"
+          for pat in "$GITHUB_WORKSPACE" "/home/runner" "C:\\Users" "/Users/"; do
+            if grep -a -q -- "$pat" "$A"; then
+              echo "::error::binary $A contains '$pat'"
+              exit 1
+            fi
+          done
+          echo "clean: no local paths in $A"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [validate, bin]
+    if: always() && needs.validate.result == 'success' && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: source archive
+        run: |
+          TAG="${{ inputs.tag }}"
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="hmaproxypool-${TAG#v}/" \
+            -o "dist/hmaproxypool-${TAG#v}-src.tar.gz" "$TAG"
+          sha256sum dist/* > dist/SHA256SUMS.txt
+          ls -lh dist
+      - name: binaries
+        if: inputs.attach_binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: checksums (with binaries)
+        if: inputs.attach_binaries
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -e
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::release $TAG already exists — delete it first: gh release delete $TAG --cleanup-tag"
+            exit 1
+          fi
+          gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" \
+            --notes "Built in CI from tag \`$TAG\`. See README for usage." \
+            dist/*
+          echo "released $TAG"

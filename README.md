@@ -30,9 +30,36 @@ Cross-compile for a release (path-free binaries, no debug info):
 
 ```bash
 go build -trimpath -ldflags "-s -w" -o hmaproxypool.exe .
-GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o hmaproxypool-linux .
+GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o hmaproxypool-linux-amd64 .
 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o hmaproxypool-linux-arm64 .
 ```
+
+## Releases
+
+Release artifacts are produced by [`.github/workflows/release.yml`](.github/workflows/release.yml)
+— nothing is built on a developer machine and uploaded by hand. Run
+**Actions → release → Run workflow** with an existing tag:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+- **Default (source-only)** — publishes the tag archive plus `SHA256SUMS.txt`.
+  No `.exe` is uploaded.
+- **`attach_binaries = true`** — additionally compiles `hmaproxypool.exe`,
+  `hmaproxypool-linux-amd64`, `hmaproxypool-linux-arm64` from the tagged
+  source inside the runner, checks the binaries for leaked build paths, and
+  publishes them with checksums.
+
+`hmatoken.exe` is **deliberately not published**: it reads another process'
+memory, which antivirus engines classify as a credential-stealer heuristic and
+which gets accounts flagged. Build it yourself if you need live token import:
+
+```bash
+go build -o hmatoken.exe ./tools/hmatoken     # Windows, elevated to run
+```
+
+Every binary is reproducible from the tag: `go build -trimpath -ldflags "-s -w" .`
 
 First run generates a random dashboard password and prints it once to the
 console, then opens `http://127.0.0.1:8899`.

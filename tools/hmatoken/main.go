@@ -14,6 +14,8 @@
 // hgproxy then reloads the token on every change (-jwt flag), re-mints the
 // tunnels and keeps the proxies up across token expiry, with no HMA client
 // interaction at all.
+//go:build windows
+
 package main
 
 import (
