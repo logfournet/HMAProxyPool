@@ -1,10 +1,11 @@
 @echo off
 cd /d "%~dp0"
 echo == HMAProxyPool build (Windows) ==
-go build -o hmaproxypool.exe .
+REM -trimpath keeps local paths out of the binary, -s -w drops debug info.
+go build -trimpath -ldflags "-s -w" -o hmaproxypool.exe .
 if errorlevel 1 goto :fail
 echo == building hmatoken.exe (optional: Windows live token import) ==
-go build -o hmatoken.exe ./tools/hmatoken 2>nul
+go build -trimpath -ldflags "-s -w" -o hmatoken.exe ./tools/hmatoken 2>nul
 if errorlevel 1 echo (hmatoken skipped)
 echo.
 echo Built: hmaproxypool.exe

@@ -11,12 +11,27 @@ Linux**; the dashboard auto-opens in your browser on start.
   ports, sessions-per-proxy, probe URL. **Nothing is hardcoded.**
 - **Pool** — create N proxies per key, rotate / verify / delete live; the pool
   (keys + desired sizes) is saved to `pool.json` and **auto-restored on boot**.
+- **APIs** — mint bearer keys (read-only or full control) and call `/api/v1/*`
+  from any program. See [API.md](API.md).
+
+![HMAProxyPool dashboard](docs/preview.png)
+
+<sub>Generated from `web/index.html` by `node tools/preview/render.js` — demo
+data only, no live pool and no real addresses.</sub>
 
 ## Quick start
 
 ```
 build.bat        (Windows)   or   ./build.sh   (Linux)
 hmaproxypool.exe            /   ./hmaproxypool
+```
+
+Cross-compile for a release (path-free binaries, no debug info):
+
+```bash
+go build -trimpath -ldflags "-s -w" -o hmaproxypool.exe .
+GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o hmaproxypool-linux .
+GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o hmaproxypool-linux-arm64 .
 ```
 
 First run generates a random dashboard password and prints it once to the
@@ -72,6 +87,8 @@ curl -X POST -H "Authorization: Bearer hmap_xxx" \
 Full reference: [API.md](API.md). Keys can be revealed again in the dashboard,
 count their requests and are revocable instantly.
 
+![APIs tab](docs/preview-apis.png)
+
 To reach the pool from other machines, set **Settings → Bind Address** to
 `0.0.0.0` (proxies and, if needed, the dashboard listen on all interfaces) and
 optionally set a shared **Proxy Username / Password** for every proxy.
@@ -112,8 +129,12 @@ HMA access tokens last ~8 h. Keep the pool alive across expiry:
   mint), `tunnel.go` (multi-peer userspace WireGuard + hedged dialing),
   `supervisor.go` (mint/probe/re-mint loop), `manager.go` (pool registry),
   `jwtfile.go`, `listeners.go`, `bind.go`, `config.go`.
-- `tokenfile.go` / `token_windows.go` / `token_other.go` — token ingestion.
-- `tools/hmatoken` — Windows helper that reads the live token from `VpnSvc.exe`.
+- `tokenfile.go` / `token_windows.go` / `token_other.go` - token ingestion.
+- `tools/hmatoken` - Windows helper that reads the live token from `VpnSvc.exe`.
+- `tools/preview` - regenerates the README screenshots from `web/index.html`
+  with fake data (`node tools/preview/render.js`, `--tab=apis`, `--out=…`,
+  `--width/--height/--scale`); needs Chrome/Chromium, no npm packages.
+- `docs/preview.png`, `docs/preview-apis.png` - the generated screenshots.
 
 ## Limits
 

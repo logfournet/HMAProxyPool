@@ -9,7 +9,7 @@ jwt*.txt
 *.exe
 *~
 hmaproxypool
-hmaproxypool-linux
+hmaproxypool-*
 
 # runtime
 pool.log
