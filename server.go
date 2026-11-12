@@ -694,6 +694,9 @@ func (a *poolApp) routes() http.Handler {
 	mux.HandleFunc("/api/proxies/", a.auth(a.deleteProxy))
 	mux.HandleFunc("/api/settings", a.auth(a.saveSettings))  // POST
 
+	// One-click proxy list export (text file or JSON) — see export.go.
+	mux.HandleFunc("/api/export", a.auth(a.exportProxies)) // GET
+
 	// API keys managed from the dashboard (cookie session).
 	mux.HandleFunc("/api/apikeys", a.auth(a.apiKeys))     // GET list / POST create
 	mux.HandleFunc("/api/apikeys/", a.auth(a.apiKeyItem)) // DELETE

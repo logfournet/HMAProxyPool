@@ -7,6 +7,10 @@ Linux**; the dashboard auto-opens in your browser on start.
 - **Login** — password-protected control panel (bcrypt + session cookie).
 - **Dashboard** — live proxy list: state, SOCKS5/HTTP endpoints, exit IP,
   traffic, session age; totals (proxies / up / down / keys).
+- **Export** — one click copies or downloads the whole list as
+  `socks5://…` / `http://…` lines, rewritten to the host your clients dial
+  (the dashboard host by default, or any address you type). No more copying
+  ports one by one.
 - **Settings** — paste your **HMA key (JWT)** or point at a watched token file;
   ports, sessions-per-proxy, probe URL. **Nothing is hardcoded.**
 - **Pool** — create N proxies per key, rotate / verify / delete live; the pool
@@ -94,6 +98,11 @@ Flags (all optional):
    - SOCKS5 `socks5://127.0.0.1:3000`
    - HTTP CONNECT `http://127.0.0.1:4000`
 4. Use them, e.g. `curl --socks5-hostname 127.0.0.1:3000 https://icanhazip.com/`.
+5. **Export the whole list**: the Proxy List card has an export row — set the
+   host clients dial (defaults to the dashboard host), pick SOCKS5 or HTTP,
+   tick *Up Only* if you want, then **Copy All** or **Download .txt**. The same
+   data is available over HTTP at `GET /api/export?format=socks5|http|json`
+   and `GET /api/v1/proxies?format=socks5&host=…`.
 
 Rotate = fresh sessions → usually a new exit IP. Verify = live exit-IP check
 through that tunnel. Deleting a proxy also decrements the key's pool plan, so
@@ -149,7 +158,9 @@ HMA access tokens last ~8 h. Keep the pool alive across expiry:
 ## Files
 
 - `main.go` — flags, wiring, browser open, shutdown.
-- `server.go` — HTTP dashboard, login/session auth, JSON API.
+- `server.go` - HTTP dashboard, login/session auth, JSON API.
+- `export.go` - proxy list export (`/api/export`): rewrite the endpoint host to
+  a reachable address and emit `socks5://` / `http://` lines or JSON.
 - `web/index.html` — embedded single-page UI (no build step).
 - `state.go` — `pool.json` persistence (password, keys, settings, plans).
 - Core (copied from the research project): `session.go` (discovery + Wrangler

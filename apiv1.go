@@ -219,8 +219,26 @@ func (a *poolApp) apiProxies(w http.ResponseWriter, r *http.Request, k *APIKey) 
 			if strings.EqualFold(r.URL.Query().Get("format"), "http") {
 				scheme = "http"
 			}
+			// ?host= rewrites the endpoint host so the output is usable from a
+			// different machine (the listeners bind to 0.0.0.0 / 127.0.0.1).
+			host := strings.TrimSpace(r.URL.Query().Get("host"))
+			if host != "" {
+				host = stripPort(host)
+			}
+			user, pass := a.mgr.Auth().User, a.mgr.Auth().Pass
 			var b strings.Builder
 			for _, p := range views {
+				if host != "" {
+					port := p.Port
+					if scheme == "http" {
+						port = p.HTTPPort
+					}
+					if line := proxyLine(scheme, host, port, user, pass); line != "" {
+						b.WriteString(line)
+						b.WriteByte('\n')
+					}
+					continue
+				}
 				u := p.Socks5
 				if scheme == "http" {
 					u = p.HTTP

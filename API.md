@@ -61,6 +61,7 @@ last). Optional query params:
 | `format`  | `socks5` / `http`             | plain text list of URLs instead of JSON |
 | `state`   | `up` / `down`                 | filter by state                 |
 | `country` | `US`, `VN`, … (case-insensitive) | only proxies whose **measured** exit country matches |
+| `host`    | `1.2.3.4`, `pool.example.com` | rewrite the endpoint host so the list is usable from another machine |
 
 Each proxy (the response wrapper is `{"count":n,"proxies":[…]}`):
 
@@ -95,6 +96,31 @@ socks5://127.0.0.1:3011
 socks5://127.0.0.1:3016
 socks5://127.0.0.1:3022
 ```
+
+Add `&host=` to replace the bind address with an address clients can reach:
+
+```bash
+curl -H "X-API-Key: hmap_xxx" \
+  "http://127.0.0.1:8899/api/v1/proxies?format=socks5&host=pool.example.com"
+```
+
+```
+socks5://user:pass@pool.example.com:3011
+socks5://user:pass@pool.example.com:3016
+```
+
+The dashboard uses this for its **Copy All** / **Download .txt** buttons, through
+the cookie-authenticated `GET /api/export` endpoint:
+
+| Param     | Values                        | Effect                          |
+|-----------|-------------------------------|---------------------------------|
+| `format`  | `socks5` / `http` / `json`    | output shape                    |
+| `host`    | any host[:port]               | endpoint host (defaults to the host the dashboard was reached on) |
+| `state`   | `up` / `down`                 | filter by state                 |
+| `country` | `US`, `VN`, …                 | filter by measured exit country  |
+| `working` | `1`                           | only proxies that are up right now |
+
+`format=json` returns `{"count":n,"host":"…","proxies":[{…,"socks5":"…","http":"…"}]}`.
 
 ### `GET /proxies/{id}`
 One proxy (same shape as above, without `proxies[]` wrapper).

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -81,7 +82,7 @@ func serveHTTPProxyConn(c net.Conn, t *Tunnel, auth ProxyAuth) {
 	}
 
 	if auth.enabled() {
-		u, p, ok := req.BasicAuth()
+		u, p, ok := proxyBasicAuth(req)
 		if !ok || u != auth.User || p != auth.Pass {
 			_, _ = io.WriteString(c,
 				"HTTP/1.1 407 Proxy Authentication Required\r\n"+
@@ -140,6 +141,33 @@ func pipe(a, b net.Conn) {
 	go func() { _, _ = io.Copy(b, a); closeWrite(b); done <- struct{}{} }()
 	<-done
 	<-done
+}
+
+// proxyBasicAuth returns the credentials from Proxy-Authorization, falling back
+// to Authorization. net/http's Request.BasicAuth only looks at Authorization,
+// which is the wrong header for a proxy (curl and browsers send
+// Proxy-Authorization), so a proxy that used it would reject every client.
+func proxyBasicAuth(req *http.Request) (user, pass string, ok bool) {
+	h := req.Header.Get("Proxy-Authorization")
+	if h == "" {
+		h = req.Header.Get("Authorization")
+	}
+	if h == "" {
+		return "", "", false
+	}
+	const prefix = "Basic "
+	if len(h) < len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
+		return "", "", false
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(h[len(prefix):]))
+	if err != nil {
+		return "", "", false
+	}
+	u, p, found := strings.Cut(string(raw), ":")
+	if !found {
+		return "", "", false
+	}
+	return u, p, true
 }
 
 func closeWrite(c net.Conn) {

@@ -108,6 +108,10 @@
   .form-row .cell{min-width:0}
   .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
   .hint{font-size:12px;color:var(--p-muted);margin-top:14px;line-height:1.6}
+  label.chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--p-muted);cursor:pointer;padding-bottom:9px}
+  label.chk input{width:14px;height:14px;accent-color:var(--p-accent);cursor:pointer}
+  #export-row{margin-top:4px;padding-top:16px;border-top:1px solid var(--line2)}
+  #ex-info{margin-top:10px}
 
   button{
     font:500 13px/1 var(--font);
@@ -327,6 +331,23 @@
           <span class="spacer"></span>
           <button class="sm" id="btn-geo" title="Re-look-up country and re-measure ping for every proxy">Refresh Geo &amp; Ping</button>
         </div>
+        <div class="form-row" id="export-row">
+          <div class="cell" style="flex:1;min-width:190px">
+            <label class="fld" for="ex-host">Export Host (What Clients Dial)</label>
+            <input id="ex-host" placeholder="hmapool.logatic.space" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="cell" style="width:150px">
+            <label class="fld" for="ex-format">Format</label>
+            <select id="ex-format">
+              <option value="socks5">SOCKS5</option>
+              <option value="http">HTTP</option>
+            </select>
+          </div>
+          <label class="chk" for="ex-working" title="Leave out proxies that are not up right now"><input type="checkbox" id="ex-working"> Up Only</label>
+          <button class="primary" id="btn-export-copy" title="Copy the whole list to the clipboard">Copy All</button>
+          <button id="btn-export-dl" title="Download the list as a .txt file">Download .txt</button>
+        </div>
+        <div id="ex-info" class="hint"></div>
         <div class="bulk" id="bulk">
           <span class="count" id="bulk-count">0 Selected</span>
           <span class="spacer"></span>
@@ -631,6 +652,14 @@ function renderSettings(o){
   set('s-user',s.proxy_user||''); set('s-pass',s.proxy_pass||'');
   const lh=$('#s-listen');
   if(lh && !lh.dataset.touched) lh.value=s.listen_host||'127.0.0.1';
+
+  // Export host defaults to the address the dashboard was reached on, which is
+  // what a client on another machine must dial.
+  const eh=$('#ex-host');
+  if(eh && !eh.dataset.touched && !eh.value){
+    const h=location.hostname;
+    eh.value=(h && h!=='localhost' && h!=='127.0.0.1')?h:(s.listen_host==='0.0.0.0'?location.hostname:h||'127.0.0.1');
+  }
 }
 
 /* ---------- selection + bulk delete ---------- */
@@ -721,6 +750,73 @@ $('#btn-rebuild').onclick=async()=>{
     await api('/api/proxies/rebuild',{method:'POST'});
     toast('Rebuilding '+n+' Proxies…');
     setTimeout(refresh,4000);
+  }catch(e){toast(e.message)}
+};
+
+/* ---------- export proxy list ---------- */
+// The pool binds to 0.0.0.0/127.0.0.1, so the raw endpoints are useless to
+// another machine. Export rewrites the host to whatever the operator dials.
+function exportURL(){
+  const q=new URLSearchParams();
+  q.set('format',$('#ex-format').value);
+  const h=$('#ex-host').value.trim();
+  if(h) q.set('host',h);
+  if($('#ex-working').checked) q.set('working','1');
+  return '/api/export?'+q.toString();
+}
+
+async function exportText(){
+  const r=await fetch(exportURL());
+  if(r.status===401){showLogin();throw new Error('unauthorized')}
+  if(!r.ok){
+    let m='HTTP '+r.status; try{const j=await r.json();if(j&&j.error)m=j.error}catch(e){}
+    throw new Error(m);
+  }
+  return await r.text();
+}
+
+function exportSummary(txt){
+  const n=txt.split('\n').filter(Boolean).length;
+  const fmt=$('#ex-format').value.toUpperCase();
+  const host=$('#ex-host').value.trim()||location.hostname;
+  $('#ex-info').textContent=n
+    ? `${n} ${fmt} Endpoint(s) Ready — Host ${host}. Press Copy All Or Download .txt.`
+    : 'No Proxies Match The Current Filters.';
+  return n;
+}
+
+$('#btn-export-copy').onclick=async()=>{
+  try{
+    const txt=await exportText();
+    const n=exportSummary(txt);
+    if(!n){toast('Nothing To Export');return}
+    try{
+      await navigator.clipboard.writeText(txt);
+      toast('Copied '+n+' '+$('#ex-format').value.toUpperCase()+' Endpoints');
+    }catch(e){
+      // clipboard blocked (plain http, or denied) — fall back to a textarea
+      const ta=document.createElement('textarea');
+      ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      const ok=document.execCommand('copy'); ta.remove();
+      toast(ok?'Copied '+n+' Endpoints':'Copy Blocked — Use Download .txt');
+    }
+  }catch(e){toast(e.message)}
+};
+
+$('#btn-export-dl').onclick=async()=>{
+  try{
+    const txt=await exportText();
+    const n=exportSummary(txt);
+    if(!n){toast('Nothing To Export');return}
+    const fmt=$('#ex-format').value;
+    const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${fmt}-proxies-${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast('Downloaded '+n+' Endpoints');
   }catch(e){toast(e.message)}
 };
 
@@ -891,7 +987,7 @@ async function promptToken(id,name){
 const API_BASE=location.origin+'/api/v1';
 const API_ENDPOINTS=[
   ['GET','/me','Key Info And Pool Totals','get'],
-  ['GET','/proxies','List Proxies — ?format=socks5|http, ?state=up, ?country=US','get'],
+  ['GET','/proxies','List Proxies - ?format=socks5|http, ?state=up, ?country=US, ?host=IP','get'],
   ['POST','/proxies','Create Proxies — {key_id, count, sessions, country}','post'],
   ['GET','/proxies/{id}','One Proxy — Country, Ping, Exit IP','get'],
   ['POST','/proxies/{id}/rotate','Rotate To A New Exit IP','post'],
@@ -1044,6 +1140,7 @@ function toast(m){const el=$('#toast');el.textContent=m;el.classList.add('show')
 /* ---------- boot ---------- */
 (async()=>{
   $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btn-login').click()});
+  $('#ex-host').addEventListener('input',()=>{$('#ex-host').dataset.touched='1'});
   renderEndpoints();
   renderExample();
   try{const me=await api('/api/me');if(me.authed){showApp()}else{showLogin()}}catch(e){showLogin()}
